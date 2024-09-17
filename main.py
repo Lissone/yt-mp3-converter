@@ -1,49 +1,85 @@
 import os
-import yt_dlp
+from yt_dlp import YoutubeDL
+import difflib
 
-def download_and_convert(url_list_file, output_dir):
-    # Configurações do yt-dlp
-    ydl_opts = {
-        'format': 'bestaudio/best',  # Melhor qualidade de áudio
-        'outtmpl': f'{output_dir}/%(title)s.%(ext)s',  # Modelo de nome de arquivo
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'noplaylist': True,  # Não baixar playlists
-        'ignoreerrors': True,  # Ignora erros de download
-    }
+# ----------------------------------------------- #
 
-    # Certifique-se de que o diretório de saída exista
-    os.makedirs(output_dir, exist_ok=True)
+URLS_FILE = 'urls.txt'
+OUTPUT_DIR = 'E:'
+# OUTPUT_DIR = 'downloads' # Debug only
 
-    with open(url_list_file, 'r') as file:
-        urls = file.readlines()
+YDL_OPTS = {
+    'format': 'bestaudio/best',  # Best audio quality
+    'outtmpl': f'{OUTPUT_DIR}/%(title)s.%(ext)s',  # Output filename template
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'mp3',
+        'preferredquality': '192',
+    }],
+    'noplaylist': True,  # Do not download playlists
+    'ignoreerrors': True,  # Ignore download errors
+    'no_warnings': True,  # Suppress warnings
+    # 'quiet': True,  # Suppress yt-dlp logs
+}
+
+# ----------------------------------------------- #
+
+def file_already_downloaded(file_path):
+    """Check if the file already exists in the output directory."""
+    return os.path.exists(file_path) or os.path.isfile(file_path)
+
+
+def titles_are_similar(title1, title2, threshold=0.8):
+    """
+    Compare two song titles and return True if they are similar enough
+    based on the threshold (default is 80% similarity).
+    """
+    similarity = difflib.SequenceMatcher(None, title1.lower(), title2.lower()).ratio()
+    return similarity >= threshold
+
+# ----------------------
+
+def download_and_convert_urls(urls, output_dir):
+    downloaded_files = []
 
     for url in urls:
-        url = url.strip()
-        if url:
-            try:
-                # Cria um objeto yt-dlp com as opções fornecidas
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    # Obtém o título do vídeo
-                    info_dict = ydl.extract_info(url, download=False)
-                    title = info_dict.get('title', 'Unknown Title')
-                    mp3_file = os.path.join(output_dir, f'{title}.mp3')
+        try:
+            with YoutubeDL(YDL_OPTS) as ydl:
+                # Extract video info
+                info_dict = ydl.extract_info(url, download=False)
+                title = info_dict.get('title', 'Unknown Title').strip()
+                mp3_file = os.path.join(output_dir, f'{title}.mp3')
 
-                    # Verifica se o arquivo MP3 já existe
-                    if os.path.isfile(mp3_file):
-                        print(f"Arquivo MP3 já existe: {mp3_file}. Pulando...")
-                        continue
+                # Check if a similar file has already been downloaded
+                similar_file_found = any(titles_are_similar(title, existing_title) for existing_title in downloaded_files)
 
-                    # Download e conversão do vídeo
-                    print(f"Baixando e convertendo: {url}")
-                    ydl.download([url])
+                if similar_file_found:
+                    print(f"Arquivo MP3 semelhante já baixado: {title}. Pulando...\n")
+                    continue
 
-            except Exception as e:
-                print(f"Erro ao processar {url}: {e}")
-                continue
+                if file_already_downloaded(mp3_file):
+                    print(f"Arquivo MP3 já existe: {mp3_file}. Pulando...\n")
+                    continue
+
+                # Download and convert the video
+                print(f"\nBaixando e convertendo: {url}")
+                ydl.download([url])
+
+                # Add title to downloaded list after successful download
+                downloaded_files.append(title)
+                print(f"Download completo: {url}\n")
+        except Exception as e:
+            print(f"Erro ao processar {url}: {e}\n")
+            continue
+
+# ----------------------------------------------- #
 
 if __name__ == "__main__":
-    download_and_convert('urls.txt', 'downloads')
+    # Ensure the output directory exists
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Read the URLs from the TXT file
+    with open(URLS_FILE, 'r') as file:
+        urls = [url.strip() for url in file.readlines() if url.strip()]
+
+    download_and_convert_urls(urls, OUTPUT_DIR)
