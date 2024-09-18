@@ -1,26 +1,62 @@
 import os
+from datetime import datetime
 from yt_dlp import YoutubeDL
 import difflib
+import logging
 
 # ----------------------------------------------- #
 
 URLS_FILE = 'urls.txt'
-OUTPUT_DIR = 'E:'
-# OUTPUT_DIR = 'downloads' # Debug only
+# OUTPUT_DIR = 'E:'
+OUTPUT_DIR = 'downloads' # Debug only
 
-YDL_OPTS = {
-    'format': 'bestaudio/best',  # Best audio quality
-    'outtmpl': f'{OUTPUT_DIR}/%(title)s.%(ext)s',  # Output filename template
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3',
-        'preferredquality': '192',
-    }],
-    'noplaylist': True,  # Do not download playlists
-    'ignoreerrors': True,  # Ignore download errors
-    'no_warnings': True,  # Suppress warnings
-    # 'quiet': True,  # Suppress yt-dlp logs
+LOG_DIR = 'logs'
+LOG_FILE = os.path.join(LOG_DIR, f'log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt')
+
+# ----------------------------------------------- #
+
+ANSI_COLORS = {
+    'reset': '\033[0m',
+    'red': '\033[91m',
+    'green': '\033[92m',
+    'yellow': '\033[93m',
+    'blue': '\033[94m'
 }
+
+def setup_logger():
+    """Configure the logger to save logs to file and display on the console with colors."""
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    logger = logging.getLogger('yt-dlp')
+    logger.setLevel(logging.DEBUG)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+
+    class ColorFormatter(logging.Formatter):
+        def format(self, record):
+            if record.levelno == logging.WARNING:
+                record.msg = f"{ANSI_COLORS['yellow']}{record.msg}{ANSI_COLORS['reset']}"
+            elif record.levelno == logging.ERROR:
+                record.msg = f"{ANSI_COLORS['red']}{record.msg}{ANSI_COLORS['reset']}"
+            elif record.levelno == logging.INFO:
+                record.msg = f"{ANSI_COLORS['green']}{record.msg}{ANSI_COLORS['reset']}"
+            elif record.levelno == logging.DEBUG:
+                record.msg = f"{ANSI_COLORS['blue']}{record.msg}{ANSI_COLORS['reset']}"
+            return super().format(record)
+
+    console_handler.setFormatter(ColorFormatter('%(levelname)-8s %(message)s'))
+
+    file_handler = logging.FileHandler(LOG_FILE)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    return logger
+
+logger = setup_logger()
 
 # ----------------------------------------------- #
 
@@ -44,32 +80,52 @@ def download_and_convert_urls(urls, output_dir):
 
     for url in urls:
         try:
-            with YoutubeDL(YDL_OPTS) as ydl:
+            ydl_opts = {
+                'format': 'bestaudio/best',  # Best audio quality
+                'outtmpl': f'{output_dir}/%(title)s.%(ext)s',  # Output filename template
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'noplaylist': True,  # Do not download playlists
+                'ignoreerrors': True,  # Ignore download errors
+                'no_warnings': True,  # Suppress warnings
+                # 'quiet': True,  # Suppress yt-dlp logs
+            }
+
+            # Add custom logger to redirect logs from yt-dlp
+            opts_with_logger = ydl_opts.copy()
+            opts_with_logger['logger'] = logger
+            
+            with YoutubeDL(opts_with_logger) as ydl:
                 # Extract video info
                 info_dict = ydl.extract_info(url, download=False)
                 title = info_dict.get('title', 'Unknown Title').strip()
-                mp3_file = os.path.join(output_dir, f'{title}.mp3')
+
+                file_name = f'{title}.mp3'
+                file_path = os.path.join(output_dir, file_name)
 
                 # Check if a similar file has already been downloaded
                 similar_file_found = any(titles_are_similar(title, existing_title) for existing_title in downloaded_files)
 
                 if similar_file_found:
-                    print(f"Arquivo MP3 semelhante já baixado: {title}. Pulando...\n")
+                    logger.warning(f"Arquivo MP3 semelhante já baixado: {file_name}\n")
                     continue
 
-                if file_already_downloaded(mp3_file):
-                    print(f"Arquivo MP3 já existe: {mp3_file}. Pulando...\n")
+                if file_already_downloaded(file_path):
+                    logger.info(f"Arquivo MP3 já existe: {file_name}\n")
                     continue
 
                 # Download and convert the video
-                print(f"\nBaixando e convertendo: {url}")
+                logger.info(f"Baixando e convertendo: {file_name} => {url}")
                 ydl.download([url])
 
                 # Add title to downloaded list after successful download
                 downloaded_files.append(title)
-                print(f"Download completo: {url}\n")
+                logger.info(f"Download completo: {file_name}\n")
         except Exception as e:
-            print(f"Erro ao processar {url}: {e}\n")
+            logger.error(f"Erro ao processar {url}: {e}\n")
             continue
 
 # ----------------------------------------------- #
