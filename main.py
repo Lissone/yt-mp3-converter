@@ -1,6 +1,6 @@
 import os
-from yt_dlp import YoutubeDL
 import difflib
+from yt_dlp import YoutubeDL
 from logger import setup_logger
 
 # ----------------------------------------------- #
@@ -8,7 +8,6 @@ from logger import setup_logger
 URLS_FILE = 'urls.txt'
 # OUTPUT_DIR = 'E:'
 OUTPUT_DIR = 'downloads' # Debug only
-
 
 logger = setup_logger()
 

@@ -41,6 +41,8 @@ A Python script that downloads YouTube videos and automatically converts them to
 
 - Python
   - yt-dlp
+  - difflib
+  - logging
 - FFmpeg
 
 ## Usage
