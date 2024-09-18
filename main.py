@@ -11,7 +11,7 @@ URLS_FILE = 'urls.txt'
 OUTPUT_DIR = 'downloads' # Debug only
 
 LOG_DIR = 'logs'
-LOG_FILE = os.path.join(LOG_DIR, f'log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt')
+LOG_FILE = os.path.join(LOG_DIR, f"log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
 
 # ----------------------------------------------- #
 
@@ -47,7 +47,7 @@ def setup_logger():
 
     console_handler.setFormatter(ColorFormatter('%(levelname)-8s %(message)s'))
 
-    file_handler = logging.FileHandler(LOG_FILE)
+    file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 
@@ -77,8 +77,12 @@ def titles_are_similar(title1, title2, threshold=0.8):
 
 def download_and_convert_urls(urls, output_dir):
     downloaded_files = []
+    total_urls = len(urls)
+    successful_downloads = 0
 
-    for url in urls:
+    logger.info(f"Iniciando download de {total_urls} músicas\n")
+
+    for index, url in enumerate(urls, start=1):
         try:
             ydl_opts = {
                 'format': 'bestaudio/best',  # Best audio quality
@@ -99,6 +103,8 @@ def download_and_convert_urls(urls, output_dir):
             opts_with_logger['logger'] = logger
             
             with YoutubeDL(opts_with_logger) as ydl:
+                logger.info(f"({index}/{total_urls}) Convertendo e baixando: {url}")
+
                 # Extract video info
                 info_dict = ydl.extract_info(url, download=False)
                 title = info_dict.get('title', 'Unknown Title').strip()
@@ -110,23 +116,26 @@ def download_and_convert_urls(urls, output_dir):
                 similar_file_found = any(titles_are_similar(title, existing_title) for existing_title in downloaded_files)
 
                 if similar_file_found:
-                    logger.warning(f"Arquivo MP3 semelhante já baixado: {file_name}\n")
+                    logger.warning(f"({index}/{total_urls}) Arquivo MP3 semelhante já baixado: {file_name}\n")
                     continue
 
                 if file_already_downloaded(file_path):
-                    logger.info(f"Arquivo MP3 já existe: {file_name}\n")
+                    logger.info(f"({index}/{total_urls}) Arquivo MP3 já existe: {file_name}\n")
                     continue
 
                 # Download and convert the video
-                logger.info(f"Baixando e convertendo: {file_name} => {url}")
                 ydl.download([url])
 
                 # Add title to downloaded list after successful download
                 downloaded_files.append(title)
-                logger.info(f"Download completo: {file_name}\n")
+                
+                successful_downloads += 1
+                logger.info(f"({index}/{total_urls}) Download completo: {file_name}\n")
         except Exception as e:
             logger.error(f"Erro ao processar {url}: {e}\n")
             continue
+
+    logger.info(f"Download concluído! {successful_downloads} / {total_urls}.\n")
 
 # ----------------------------------------------- #
 
@@ -135,7 +144,7 @@ if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Read the URLs from the TXT file
-    with open(URLS_FILE, 'r') as file:
+    with open(URLS_FILE, 'r', encoding='utf-8') as file:
         urls = [url.strip() for url in file.readlines() if url.strip()]
 
     download_and_convert_urls(urls, OUTPUT_DIR)
