@@ -88,7 +88,7 @@ def download_and_convert_urls(urls, output_dir):
             logger.error(f"Erro ao processar {url}: {e}\n")
             continue
 
-    logger.info(f"Download concluído! {successful_downloads} / {total_urls}.\n")
+    logger.info(f"({successful_downloads}/{total_urls}) Download em lote concluído!\n")
 
 # ----------------------------------------------- #
 
